@@ -1,5 +1,6 @@
 #include "app.h"
 #include "network/wifi.h"
+#include "camera/camera.h"
 
 #include <esp_log.h>
 #include <nvs_flash.h>
@@ -28,7 +29,10 @@ status_t app_init() {
 	status = wifi_init();
 	CHECK_STATUS(status);
 
-	return ST_SUCCESS;
+	status = camera_init();
+	CHECK_STATUS(status);
+
+	return status;
 }
 
 void app_run() {
