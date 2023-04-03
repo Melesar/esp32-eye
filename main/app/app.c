@@ -1,5 +1,7 @@
 #include "app.h"
+#include "network/server.h"
 #include "network/wifi.h"
+#include "network/tasks.h"
 #include "camera/camera.h"
 
 #include <esp_log.h>
@@ -7,10 +9,13 @@
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <freertos/event_groups.h>
 
 #define CHECK_STATUS(status) if (ST_SUCCESS != status) { return status; }
 
 static char* TAG = "app";
+
+static EventGroupHandle_t event_group;
 
 static status_t nvs_init() {
     esp_err_t ret = nvs_flash_init();
@@ -36,5 +41,10 @@ status_t app_init() {
 }
 
 void app_run() {
-	vTaskDelay(10000 * portTICK_PERIOD_MS);
+	server_start();
+
+	event_group = xEventGroupCreate();
+
+	xTaskCreate(task_handle_network_messages, "Handle messages", 4096, event_group, PRIORITY_HIGH, NULL);
+	xTaskCreate(task_send_heartbeats, "Heartbeats", 4096, event_group, PRIORITY_HIGH - 1, NULL);
 }
