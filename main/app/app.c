@@ -46,5 +46,5 @@ void app_run() {
 	event_group = xEventGroupCreate();
 
 	xTaskCreate(task_handle_network_messages, "Handle messages", 4096, event_group, PRIORITY_HIGH, NULL);
-	xTaskCreate(task_send_heartbeats, "Heartbeats", 4096, event_group, PRIORITY_HIGH - 1, NULL);
+	xTaskCreate(task_send_heartbeats, "Heartbeats", 4096, event_group, PRIORITY_NORMAL, NULL);
 }

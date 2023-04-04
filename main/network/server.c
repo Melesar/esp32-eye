@@ -66,7 +66,7 @@ int server_accept_connections() {
 	strcpy(new_connection.address_string, inet_ntoa(incoming_address.sin_addr));
 	connections[next_connection_index++] = new_connection;
 
-	return next_connection_index;
+	return next_connection_index - 1;
 }
 
 char* server_get_client_address(int client_index) {
