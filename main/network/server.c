@@ -49,11 +49,14 @@ status_t server_start() {
     return ST_SUCCESS;
 }
 
-int server_accept_connections() {
+int server_accept_connections(SemaphoreHandle_t semaphore) {
+	xSemaphoreTake(semaphore, portMAX_DELAY);
 	if (next_connection_index >= MAX_CONNECTIONS) {
+		xSemaphoreGive(semaphore);
 		return -1;
 	}
 
+	xSemaphoreGive(semaphore);
 	struct sockaddr_in incoming_address;
 	int address_length = sizeof(incoming_address);
 	int client_socket = accept(server_socket, (struct sockaddr*) &incoming_address, (socklen_t*) &address_length);
@@ -64,36 +67,56 @@ int server_accept_connections() {
 
 	client_connection_t new_connection = {.socket = client_socket };
 	strcpy(new_connection.address_string, inet_ntoa(incoming_address.sin_addr));
-	connections[next_connection_index++] = new_connection;
 
-	return next_connection_index - 1;
+	xSemaphoreTake(semaphore, portMAX_DELAY);
+	connections[next_connection_index++] = new_connection;
+	int new_connection_index = next_connection_index - 1;
+	xSemaphoreGive(semaphore);
+
+	return new_connection_index;
 }
 
-char* server_get_client_address(int client_index) {
+char* server_get_client_address(int client_index, SemaphoreHandle_t semaphore) {
+	xSemaphoreTake(semaphore, portMAX_DELAY);
 	if (client_index < 0 || client_index >= next_connection_index) {
+		xSemaphoreGive(semaphore);
 		return "";
 	}
 
-	return connections[client_index].address_string;
+	char* address_string = connections[client_index].address_string;
+	xSemaphoreGive(semaphore);
+
+	return address_string;
 }
 
-int server_get_clients_count() {
-	return next_connection_index;
+int server_get_clients_count(SemaphoreHandle_t semaphore) {
+	xSemaphoreTake(semaphore, portMAX_DELAY);
+	int count = next_connection_index;
+	xSemaphoreGive(semaphore);
+
+	return count;
 }
 
-bool server_send_heartbeat(int client_index) {
+bool server_send_heartbeat(int client_index, SemaphoreHandle_t semaphore) {
+	xSemaphoreTake(semaphore, portMAX_DELAY);
 	if (client_index < 0 || client_index >= next_connection_index) {
+		xSemaphoreGive(semaphore);
 		return false;
 	}
 
 	client_connection_t client = connections[client_index];
 
 	char heartbeat = 0xDC;
-	return send(client.socket, &heartbeat, sizeof(heartbeat), 0) > 0;
+	bool did_send = send(client.socket, &heartbeat, sizeof(heartbeat), 0) > 0;
+	xSemaphoreGive(semaphore);
+
+	return did_send;
 }
 
-void server_disconnect_client(int client_index) {
+void server_disconnect_client(int client_index, SemaphoreHandle_t semaphore) {
+	xSemaphoreTake(semaphore, portMAX_DELAY);
 	connections[client_index] = connections[--next_connection_index];
+	xSemaphoreGive(semaphore);
 }
 
 void server_shutdown() {
