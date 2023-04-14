@@ -31,7 +31,7 @@ static camera_config_t config = {
 	.fb_location = CAMERA_FB_IN_PSRAM,
 	.frame_size = FRAMESIZE_SVGA,
 	.jpeg_quality = 12,
-	.fb_count = 1
+	.fb_count = CAMERA_NUM_FRAMEBUFFERS,
 };
 
 status_t camera_init() {

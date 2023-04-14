@@ -5,6 +5,7 @@
 #include "camera/camera.h"
 
 #include <esp_log.h>
+#include <esp_camera.h>
 #include <nvs_flash.h>
 
 #define CHECK_STATUS(status) if (ST_SUCCESS != status) { return status; }
@@ -41,7 +42,13 @@ void app_run() {
 
 	task_sync.event_group = xEventGroupCreate();
 	task_sync.mutex = xSemaphoreCreateMutex();
+	task_sync.image_produce_queue = xQueueCreate(1, sizeof(camera_fb_t*));
+	task_sync.image_recycle_queue = xQueueCreate(1, sizeof(camera_fb_t*));
 
-	xTaskCreate(task_handle_network_messages, "Handle messages", 4096, &task_sync, PRIORITY_HIGH, NULL);
-	xTaskCreate(task_send_heartbeats, "Heartbeats", 4096, &task_sync, PRIORITY_NORMAL, NULL);
+	xTaskCreatePinnedToCore(task_send_camera_image, "Send image", 4096, &task_sync, PRIORITY_HIGH, NULL, 0);
+	xTaskCreatePinnedToCore(task_handle_network_messages, "Handle messages", 4096, &task_sync, PRIORITY_NORMAL, NULL, 0);
+	xTaskCreatePinnedToCore(task_send_heartbeats, "Heartbeats", 4096, &task_sync, PRIORITY_LOW, NULL, 0);
+
+	xTaskCreatePinnedToCore(task_capture_camera_image, "Capture image", 4096, &task_sync, PRIORITY_HIGH, NULL, 1);
+	xTaskCreatePinnedToCore(task_recycle_camera_image, "Recycle image", 4096, &task_sync, PRIORITY_HIGH, NULL, 1);
 }
