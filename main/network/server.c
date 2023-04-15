@@ -8,6 +8,7 @@
 #include <lwip/inet.h>
 
 #define SERVER_PORT 3452
+#define BROADCAST_PORT 45122
 #define MAX_CONNECTIONS 10
 
 #define RTP_PORT 45120
@@ -15,7 +16,10 @@
 
 #define TAG "server"
 
-static char HEADER_HEARTBEAT = 0xDC;
+typedef enum {
+	MESSAGE_HEARTBEAT = 0xDCACBDFA,
+	MESSAGE_BROADCAST = 0xAABB1234,
+} message_header_t;
 
 typedef struct {
 	uint8_t version_with_flags;
@@ -34,6 +38,7 @@ struct client_connection{
 
 static int server_socket;
 static int rtp_socket;
+static int broadcast_socket;
 static int next_connection_index = 0;
 static uint32_t rtp_ssid;
 static client_connection_t connections[MAX_CONNECTIONS] = {0};
@@ -46,6 +51,18 @@ status_t server_start() {
 	}
 
 	rtp_ssid = esp_random();
+
+	broadcast_socket = socket(AF_INET, SOCK_DGRAM, 0);
+	if (broadcast_socket < 0) {
+		ESP_LOGE(TAG, "Failed to create broadcast socket");
+		return ST_SERVER_INITIALIZATION_FAILED;
+	}
+
+	int broadcast = 1;
+	if (setsockopt(broadcast_socket, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast)) < 0) {
+		ESP_LOGE(TAG, "Failed to obtain broadcasting permissions");
+		return ST_SERVER_INITIALIZATION_FAILED;
+	}
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (!server_socket) {
@@ -142,12 +159,22 @@ bool server_send_heartbeat(int client_index, SemaphoreHandle_t semaphore) {
 
 	client_connection_t client = connections[client_index];
 
-	char heartbeat = HEADER_HEARTBEAT;
+	uint32_t heartbeat = MESSAGE_HEARTBEAT;
 	int sent = send(client.control_socket, &heartbeat, sizeof(heartbeat), MSG_DONTWAIT);
 	bool is_success = sent >= 0 || errno == EAGAIN || errno == EWOULDBLOCK;
 	xSemaphoreGive(semaphore); 
 
 	return is_success;
+}
+
+void server_send_broadcast() {
+	struct sockaddr_in address = {0};
+	address.sin_family = AF_INET;
+	address.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+	address.sin_port = htons(BROADCAST_PORT);
+
+	int message = MESSAGE_BROADCAST;
+	sendto(broadcast_socket, &message, sizeof(message), 0, (struct sockaddr*)&address, sizeof(address));
 }
 
 static void get_rtp_header(rtp_header_t* header, uint16_t sequence_number, uint32_t timestamp, uint32_t payload_length) {

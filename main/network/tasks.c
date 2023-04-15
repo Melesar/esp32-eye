@@ -11,6 +11,8 @@
 #include <freertos/task.h>
 
 #define HEARTBET_INTERVAL_MS 1000
+#define BROADCAST_INTERVAL_MS 3000
+
 #define TARGET_FRAMERATE 30
 #define CAPTURE_INTERVAL_MS 1000 / TARGET_FRAMERATE
 
@@ -60,6 +62,13 @@ void task_send_heartbeats(void* params) {
 
         vTaskDelay(pdMS_TO_TICKS(HEARTBET_INTERVAL_MS));
     }
+}
+
+void task_send_broadcasts(void* params) {
+	while(1) {
+		server_send_broadcast();
+		vTaskDelay(pdMS_TO_TICKS(BROADCAST_INTERVAL_MS));
+	}
 }
 
 void task_capture_camera_image(void* params) {

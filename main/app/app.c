@@ -48,6 +48,7 @@ void app_run() {
 	xTaskCreatePinnedToCore(task_send_camera_image, "Send image", 4096, &task_sync, PRIORITY_HIGH, NULL, 0);
 	xTaskCreatePinnedToCore(task_handle_network_messages, "Handle messages", 4096, &task_sync, PRIORITY_NORMAL, NULL, 0);
 	xTaskCreatePinnedToCore(task_send_heartbeats, "Heartbeats", 4096, &task_sync, PRIORITY_LOW, NULL, 0);
+	xTaskCreatePinnedToCore(task_send_broadcasts, "Broadcasts", 4096, &task_sync, PRIORITY_LOW, NULL, 0);
 
 	xTaskCreatePinnedToCore(task_capture_camera_image, "Capture image", 4096, &task_sync, PRIORITY_HIGH, NULL, 1);
 	xTaskCreatePinnedToCore(task_recycle_camera_image, "Recycle image", 4096, &task_sync, PRIORITY_HIGH, NULL, 1);

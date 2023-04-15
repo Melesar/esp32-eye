@@ -20,6 +20,7 @@ typedef struct {
 
 void task_handle_network_messages(void* params);
 void task_send_heartbeats(void* params);
+void task_send_broadcasts(void* params);
 void task_send_camera_image(void* params);
 
 void task_capture_camera_image(void* params);
