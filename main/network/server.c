@@ -19,6 +19,7 @@
 typedef enum {
 	MESSAGE_HEARTBEAT = 0xDCACBDFA,
 	MESSAGE_BROADCAST = 0xAABB1234,
+	MESSAGE_HELLO = 0xCABFEEFD,
 } message_header_t;
 
 typedef struct {
@@ -35,6 +36,10 @@ struct client_connection{
 	char address_string[20];
 	struct sockaddr_in rtp_address;
 };
+
+typedef struct {
+	char device_name[32];
+} hello_message_t;
 
 static int server_socket;
 static int rtp_socket;
@@ -107,6 +112,23 @@ int server_accept_connections(SemaphoreHandle_t semaphore) {
 	if (client_socket < 0) {
 		return -1;
 	}
+
+	hello_message_t hello_message = {0};
+	strncpy(hello_message.device_name, CONFIG_DEVICE_NAME, 32);
+
+	
+	uint32_t message_header = MESSAGE_HELLO;
+	struct iovec iovs[2];
+	iovs[0].iov_base = &message_header;
+	iovs[0].iov_len = sizeof(message_header);
+	iovs[1].iov_base = &hello_message;
+	iovs[1].iov_len = sizeof(hello_message);
+	
+	struct msghdr message = {0};
+	message.msg_iov = iovs;
+	message.msg_iovlen = 2;
+	
+	sendmsg(client_socket, &message, 0);
 
 	struct sockaddr_in rtp_address = incoming_address;
 	rtp_address.sin_port = htons(RTP_PORT);
