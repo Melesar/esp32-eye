@@ -9,6 +9,7 @@
 typedef enum {
 	CLIENTS_AVAILABLE_BIT = 1,
 	CLIENT_CONNECTED_BIT = 2,
+	CLIENTS_INTERESTED_IN_VIDEO_BIT = 4,
 } network_bits_t;
 
 typedef struct {
@@ -18,8 +19,8 @@ typedef struct {
 	QueueHandle_t image_recycle_queue;
 } task_sync_t;
 
-void task_handle_network_messages(void* params);
-void task_send_heartbeats(void* params);
+void task_accept_new_clients(void* params);
+void task_handle_requests(void* params);
 void task_send_broadcasts(void* params);
 void task_send_camera_image(void* params);
 

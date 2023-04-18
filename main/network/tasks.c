@@ -10,58 +10,73 @@
 #include <freertos/event_groups.h>
 #include <freertos/task.h>
 
-#define HEARTBET_INTERVAL_MS 1000
 #define BROADCAST_INTERVAL_MS 3000
 
 #define TARGET_FRAMERATE 30
 #define CAPTURE_INTERVAL_MS 1000 / TARGET_FRAMERATE
 
-void task_handle_network_messages(void* params) {
+static void update_video_interest(int client_index, bool is_interested, task_sync_t* task_sync) {
+	xSemaphoreTake(task_sync->mutex, portMAX_DELAY);
+	uint16_t previous_interest = server_get_video_interest();
+	uint16_t new_interest = server_update_client_video_interest(client_index, is_interested);
+	xSemaphoreGive(task_sync->mutex);
+
+	if (!previous_interest && new_interest) {
+		xEventGroupSetBits(task_sync->event_group, CLIENTS_INTERESTED_IN_VIDEO_BIT);
+	} else if (previous_interest && !new_interest) {
+		xEventGroupClearBits(task_sync->event_group, CLIENTS_INTERESTED_IN_VIDEO_BIT);
+	}
+
+	ESP_LOGI("requests", "Received message video interest update from %d: %c", client_index, (uint8_t)is_interested);
+}
+
+void task_accept_new_clients(void* params) {
     char* tag = "network_messages";
     ESP_LOGI(tag, "Starting handling network messages");
 
     task_sync_t* task_sync = (task_sync_t*)params;
     while (1) {
         int new_connection_index = server_accept_connections(task_sync->mutex);
+        if (new_connection_index < 0) {
+            ESP_LOGE(tag, "Failed to accept connection");
+			continue;
+        }
+
         if (server_get_clients_count(task_sync->mutex) == 1) {
             xEventGroupSetBits(task_sync->event_group, CLIENTS_AVAILABLE_BIT);
         }
 
         xEventGroupSetBits(task_sync->event_group, CLIENT_CONNECTED_BIT);
-
-        if (new_connection_index >= 0) {
-            char* address_string = server_get_client_address(
-                new_connection_index, task_sync->mutex);
-            ESP_LOGI(tag, "Connection accepted: %s", address_string);
-        } else {
-            ESP_LOGE(tag, "Failed to accept connection");
-        }
     }
 }
 
-void task_send_heartbeats(void* params) {
-    char* tag = "heartbeats";
+void task_handle_requests(void* params) {
+	task_sync_t* task_sync = (task_sync_t*) params;
 
-    task_sync_t* task_sync = (task_sync_t*)params;
-    while (1) {
-        xEventGroupWaitBits(task_sync->event_group, CLIENTS_AVAILABLE_BIT,
-                            pdFALSE, pdFALSE, portMAX_DELAY);
+	size_t served_requests;
+	request_t requests_buffer[MAX_CONNECTIONS];
+	while(1) {
+		xEventGroupWaitBits(task_sync->event_group, CLIENTS_AVAILABLE_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
 
-        int clients_count = server_get_clients_count(task_sync->mutex);
-        for (int client_index = clients_count - 1; client_index >= 0;
-             --client_index) {
-            if (!server_send_heartbeat(client_index, task_sync->mutex)) {
-                ESP_LOGI(tag, "Client %d disconnected", client_index);
-                server_disconnect_client(client_index, task_sync->mutex);
-            }
-        }
+		server_handle_requests(requests_buffer, &served_requests, task_sync->mutex);
 
-        if (server_get_clients_count(task_sync->mutex) == 0) {
-            xEventGroupClearBits(task_sync->event_group, CLIENTS_AVAILABLE_BIT);
-        }
+		for(int i = 0; i < served_requests; ++i) {
+			request_t request = requests_buffer[i];
+			switch(request.request_type) {
+				case REQUEST_VIDEO_INTEREST:
+					update_video_interest(request.client_index, *(bool*)request.request_body, task_sync);
+					break;
+			}
+		}
 
-        vTaskDelay(pdMS_TO_TICKS(HEARTBET_INTERVAL_MS));
-    }
+		if (!server_get_clients_count_sync(task_sync->mutex)) {
+			xEventGroupClearBits(task_sync->event_group, CLIENTS_AVAILABLE_BIT);
+		}
+
+		if (!server_get_video_interest_sync(task_sync->mutex)) {
+			xEventGroupClearBits(task_sync->event_group, CLIENTS_INTERESTED_IN_VIDEO_BIT);
+		}
+	}
 }
 
 void task_send_broadcasts(void* params) {
@@ -75,7 +90,7 @@ void task_capture_camera_image(void* params) {
 	task_sync_t* task_sync = (task_sync_t*) params;
 
 	while(1) {
-        xEventGroupWaitBits(task_sync->event_group, CLIENTS_AVAILABLE_BIT,
+        xEventGroupWaitBits(task_sync->event_group, CLIENTS_AVAILABLE_BIT | CLIENTS_INTERESTED_IN_VIDEO_BIT,
                             pdFALSE, pdTRUE, portMAX_DELAY);
 
 		uint64_t time_to_wait_ms = CAPTURE_INTERVAL_MS;
@@ -127,7 +142,6 @@ void task_send_camera_image(void* params) {
 		uint64_t end = esp_timer_get_time();
 
 		ESP_LOGI("image_send", "Image sent in %llu ms", (end - start) / 1000);
-
 
 		xQueueSendToBack(task_sync->image_recycle_queue, &fb, portMAX_DELAY);
     }

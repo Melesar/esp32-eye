@@ -46,8 +46,8 @@ void app_run() {
 	task_sync.image_recycle_queue = xQueueCreate(1, sizeof(camera_fb_t*));
 
 	xTaskCreatePinnedToCore(task_send_camera_image, "Send image", 4096, &task_sync, PRIORITY_HIGH, NULL, 0);
-	xTaskCreatePinnedToCore(task_handle_network_messages, "Handle messages", 4096, &task_sync, PRIORITY_NORMAL, NULL, 0);
-	xTaskCreatePinnedToCore(task_send_heartbeats, "Heartbeats", 4096, &task_sync, PRIORITY_LOW, NULL, 0);
+	xTaskCreatePinnedToCore(task_accept_new_clients, "Accept new clients", 4096, &task_sync, PRIORITY_NORMAL, NULL, 0);
+	xTaskCreatePinnedToCore(task_handle_requests, "Handle requests", 4096, &task_sync, PRIORITY_NORMAL, NULL, 0);
 	xTaskCreatePinnedToCore(task_send_broadcasts, "Broadcasts", 4096, &task_sync, PRIORITY_LOW, NULL, 0);
 
 	xTaskCreatePinnedToCore(task_capture_camera_image, "Capture image", 4096, &task_sync, PRIORITY_HIGH, NULL, 1);
