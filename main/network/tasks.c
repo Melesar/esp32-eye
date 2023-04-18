@@ -129,19 +129,24 @@ void task_recycle_camera_image(void* params) {
 
 void task_send_camera_image(void* params) {
     task_sync_t* task_sync = (task_sync_t*)params;
+
+	uint16_t sequence_number = (uint16_t)(esp_random() % 100);
+	uint32_t timestamp = esp_random() % 1000;
     while (1) {
 		camera_fb_t* fb;
 		xQueueReceive(task_sync->image_produce_queue, &fb, portMAX_DELAY);
 
 		uint64_t start = esp_timer_get_time();
 		xSemaphoreTake(task_sync->mutex, portMAX_DELAY);
-		if (!server_send_image_data(fb->buf, fb->len, 0, 0)) {
+		if (!server_send_image_data(fb->buf, fb->len, sequence_number++, timestamp)) {
 			ESP_LOGE("image_send", "Failed to send image to clients");
 		}
 		xSemaphoreGive(task_sync->mutex);
 		uint64_t end = esp_timer_get_time();
 
-		ESP_LOGI("image_send", "Image sent in %llu ms", (end - start) / 1000);
+		uint32_t millisecods_elapsed = (end - start) / 1000;
+		ESP_LOGI("image_send", "Image sent in %zu ms", millisecods_elapsed);
+		timestamp += millisecods_elapsed;
 
 		xQueueSendToBack(task_sync->image_recycle_queue, &fb, portMAX_DELAY);
     }
