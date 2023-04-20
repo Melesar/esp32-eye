@@ -171,6 +171,7 @@ int server_accept_connections(SemaphoreHandle_t semaphore) {
 		return i;
 	}
 
+	xSemaphoreGive(semaphore);
 	return -1;
 }
 
